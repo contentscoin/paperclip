@@ -394,6 +394,27 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
+  it("renders issues with legacy advisory execution policy metadata", async () => {
+    const root = renderProperties(container, {
+      issue: createIssue({
+        executionPolicy: {
+          clean_scope_only: true,
+          requires_human_approval_for_scope_change: true,
+        } as never,
+      }),
+      childIssues: [],
+      onUpdate: vi.fn(),
+      inline: true,
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Reviewers");
+    expect(container.textContent).toContain("Approvers");
+    expect(container.textContent).toContain("Monitor");
+
+    act(() => root.unmount());
+  });
+
   it("passes blocker attention to the sidebar status icon", async () => {
     const root = renderProperties(container, {
       issue: createIssue({

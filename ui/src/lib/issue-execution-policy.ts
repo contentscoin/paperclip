@@ -29,8 +29,12 @@ export function selectionValueFromPrincipal(principal: IssueExecutionStagePrinci
   return principal.type === "agent" ? `agent:${principal.agentId}` : `user:${principal.userId}`;
 }
 
+function policyStages(policy: IssueExecutionPolicy | null | undefined): IssueExecutionPolicy["stages"] {
+  return Array.isArray(policy?.stages) ? policy.stages : [];
+}
+
 export function stageParticipantValues(policy: IssueExecutionPolicy | null | undefined, stageType: StageType): string[] {
-  const stage = policy?.stages.find((candidate) => candidate.type === stageType);
+  const stage = policyStages(policy).find((candidate) => candidate.type === stageType);
   return stage?.participants.map((participant) => selectionValueFromPrincipal(participant)) ?? [];
 }
 
@@ -64,7 +68,8 @@ export function buildExecutionPolicy(input: {
   const stages: IssueExecutionPolicy["stages"] = [];
   const monitor = input.existingPolicy?.monitor ?? null;
 
-  const existingReviewStage = input.existingPolicy?.stages.find((stage) => stage.type === "review");
+  const existingStages = policyStages(input.existingPolicy);
+  const existingReviewStage = existingStages.find((stage) => stage.type === "review");
   const reviewParticipants = mergeParticipants(existingReviewStage?.participants, input.reviewerValues);
   if (reviewParticipants.length > 0) {
     stages.push({
@@ -75,7 +80,7 @@ export function buildExecutionPolicy(input: {
     });
   }
 
-  const existingApprovalStage = input.existingPolicy?.stages.find((stage) => stage.type === "approval");
+  const existingApprovalStage = existingStages.find((stage) => stage.type === "approval");
   const approvalParticipants = mergeParticipants(existingApprovalStage?.participants, input.approverValues);
   if (approvalParticipants.length > 0) {
     stages.push({
