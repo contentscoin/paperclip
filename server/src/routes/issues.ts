@@ -138,6 +138,19 @@ type SuccessfulRunHandoffActivityRow = {
   createdAt: Date;
 };
 
+function issueForResponse<T extends { executionPolicy?: unknown }>(issue: T): T {
+  if (issue.executionPolicy == null) return issue;
+  const normalizedPolicy = normalizeIssueExecutionPolicy(issue.executionPolicy);
+  return {
+    ...issue,
+    executionPolicy: normalizedPolicy ?? {
+      mode: "normal",
+      commentRequired: true,
+      stages: [],
+    },
+  };
+}
+
 function applyCreateIssueStatusDefault(req: Request, res: Response, next: () => void) {
   if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
     next();
@@ -1453,7 +1466,7 @@ export function issueRoutes(
       result.map((issue) => issue.id),
     );
     res.json(result.map((issue) => ({
-      ...issue,
+      ...issueForResponse(issue),
       successfulRunHandoff: handoffStates.get(issue.id) ?? null,
     })));
   });
@@ -1669,7 +1682,7 @@ export function issueRoutes(
       : null;
     const workProducts = await workProductsSvc.listForIssue(issue.id);
     res.json({
-      ...issue,
+      ...issueForResponse(issue),
       goalId: goal?.id ?? issue.goalId,
       ancestors,
       ...(blockerAttention ? { blockerAttention } : {}),
