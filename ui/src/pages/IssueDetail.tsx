@@ -930,8 +930,52 @@ function IssueWorkflowCard({ workflow, loading, error }: IssueWorkflowCardProps)
   const totalRuns = workflow?.summary.totalRuns ?? 0;
   const activeRuns = workflow?.summary.activeRuns ?? 0;
   const latestRunStatus = workflow?.summary.latestRunStatus ?? "none";
-  const totalEvents = nodes.filter((node) => node.type === "event").length;
+  const eventNodes = nodes.filter((node) => node.type === "event");
+  const runNodes = nodes.filter((node) => node.type === "run");
+  const totalEvents = eventNodes.length;
   const totalEdges = workflow?.edges.length ?? 0;
+  const outputEventCount = eventNodes.filter((node) => {
+    const status = (node.status ?? "").toLowerCase();
+    const label = node.label.toLowerCase();
+    return ["stdout", "stderr", "tool", "result", "assistant", "message"].some((token) => status.includes(token) || label.includes(token));
+  }).length;
+  const failedRunCount = runNodes.filter((node) => ["failed", "error", "timed_out", "cancelled"].includes((node.status ?? "").toLowerCase())).length;
+  const runningRunCount = runNodes.filter((node) => ["running", "queued"].includes((node.status ?? "").toLowerCase())).length;
+  const workflowHealth = (() => {
+    if (nodes.length === 0) {
+      return {
+        tone: "empty",
+        title: "No workflow events yet",
+        detail: "Assign or wake an agent to start capturing runs and events for this issue.",
+      };
+    }
+    if (activeRuns > 0 && outputEventCount === 0) {
+      return {
+        tone: "waiting",
+        title: "Waiting for agent output",
+        detail: "The run has started but no stdout, stderr, tool, or result event is visible yet. Check the run log or pause/retry if this stays unchanged.",
+      };
+    }
+    if (failedRunCount > 0 || ["failed", "error", "timed_out", "cancelled"].includes((latestRunStatus ?? "").toLowerCase())) {
+      return {
+        tone: "attention",
+        title: "Needs attention",
+        detail: "One or more workflow runs ended unsuccessfully. Open the run log, review the latest event, then retry or reassign.",
+      };
+    }
+    if (runningRunCount > 0 || activeRuns > 0) {
+      return {
+        tone: "running",
+        title: "Running with output",
+        detail: "The agent is producing workflow events. Use the graph below to follow issue → run → event progress.",
+      };
+    }
+    return {
+      tone: "complete",
+      title: "Workflow captured",
+      detail: "Historical runs and events are available below for audit and handoff review.",
+    };
+  })();
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
   const visibleEdges = useMemo(
     () => (workflow?.edges ?? []).filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)).slice(0, 12),
@@ -976,6 +1020,18 @@ function IssueWorkflowCard({ workflow, loading, error }: IssueWorkflowCardProps)
           <span className="rounded-full border border-border bg-background px-2 py-1">Active {activeRuns}</span>
           <span className="rounded-full border border-border bg-background px-2 py-1">Latest {latestRunStatus}</span>
         </div>
+      </div>
+
+      <div className={cn(
+        "mt-3 rounded-md border px-3 py-2 text-xs",
+        workflowHealth.tone === "attention" ? "border-red-500/30 bg-red-500/10 text-red-900 dark:text-red-100" :
+        workflowHealth.tone === "waiting" ? "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100" :
+        workflowHealth.tone === "running" ? "border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-100" :
+        workflowHealth.tone === "empty" ? "border-border bg-background/70 text-muted-foreground" :
+        "border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100",
+      )}>
+        <div className="font-semibold text-foreground">Workflow health · {workflowHealth.title}</div>
+        <p className="mt-1 leading-relaxed">{workflowHealth.detail}</p>
       </div>
 
       {loading ? (

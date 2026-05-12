@@ -952,6 +952,71 @@ describe("IssueDetail", () => {
     });
   });
 
+  it("explains a running workflow that has not produced agent output yet", async () => {
+    mockIssuesApi.get.mockResolvedValue(createIssue({ status: "in_progress", executionRunId: "run-1" }));
+    mockIssuesApi.getWorkflow.mockResolvedValue({
+      issue: {
+        id: "issue-1",
+        companyId: "company-1",
+        status: "in_progress",
+        assigneeAgentId: "agent-1",
+        executionRunId: "run-1",
+      },
+      summary: {
+        totalRuns: 1,
+        activeRuns: 1,
+        latestRunStatus: "running",
+        latestEventSeq: 1,
+      },
+      nodes: [
+        { id: "issue:issue-1", type: "issue", status: "in_progress", label: "PAP-1" },
+        { id: "run:run-1", type: "run", status: "running", label: "Builder" },
+        { id: "event:run-1:1", type: "event", status: "lifecycle", label: "lifecycle #1" },
+      ],
+      edges: [
+        { id: "issue:issue-1->run:run-1", source: "issue:issue-1", target: "run:run-1" },
+        { id: "run:run-1->event:run-1:1", source: "run:run-1", target: "event:run-1:1" },
+      ],
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <IssueDetail />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    await waitForAssertion(() => {
+      expect(container.textContent).toContain("Workflow health");
+      expect(container.textContent).toContain("Waiting for agent output");
+      expect(container.textContent).toContain("The run has started but no stdout, stderr, tool, or result event is visible yet.");
+      expect(container.textContent).toContain("Check the run log or pause/retry if this stays unchanged.");
+    });
+  });
+
+  it("gives a useful next step when no workflow events exist yet", async () => {
+    mockIssuesApi.get.mockResolvedValue(createIssue({ status: "todo", executionRunId: null }));
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <IssueDetail />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    await waitForAssertion(() => {
+      expect(container.textContent).toContain("Workflow health");
+      expect(container.textContent).toContain("No workflow events yet");
+      expect(container.textContent).toContain("Assign or wake an agent to start capturing runs and events for this issue.");
+    });
+  });
+
   it("passes blocker attention to the issue detail header status icon", async () => {
     mockIssuesApi.get.mockResolvedValue(createIssue({
       status: "blocked",
